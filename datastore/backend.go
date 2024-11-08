@@ -52,10 +52,10 @@ func init() {
 		return
 	}
 
-	MonitoringID = os.Getenv("MONITORING_ID")
-	if MonitoringID == "" {
-		log.Logger.Fatal().Msg("MONITORING_ID is not set")
-	}
+	//MonitoringID = os.Getenv("MONITORING_ID")
+	//if MonitoringID == "" {
+	//	log.Logger.Fatal().Msg("MONITORING_ID is not set")
+	//}
 
 	NodeID = os.Getenv("NODE_NAME")
 	if NodeID == "" {
