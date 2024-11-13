@@ -67,12 +67,12 @@ generate:
 	$(STRIP) -g $@
 
 
-## Alaz Image
+## Oodle Image
 
-ALAZ_IMAGE_NAME := alaz
-ALAZ_TAG ?= latest
-REGISTRY ?= ddosify
-ALAZ_DOCKERFILE ?= Dockerfile.default
+OODLE_IMAGE_NAME := k8sebpf
+OODLE_TAG ?= latest
+REGISTRY ?= public.ecr.aws/h3e9h5g1/oodle
+OODLE_DOCKERFILE ?= Dockerfile.default
 BUILDX_BUILDER := buildx-multi-arch
 
 ifeq ($(TARGET_ARCH), arm64)
@@ -85,23 +85,23 @@ endif
 build_push_buildx:
 	docker buildx inspect $(BUILDX_BUILDER) || \
 	docker buildx create --name=$(BUILDX_BUILDER) && \
-	docker buildx build --push --platform=$(DOCKER_PLATFORM) --builder=$(BUILDX_BUILDER) --build-arg ALAZ_TAG=$(ALAZ_TAG) --build-arg VERSION=$(ALAZ_TAG) --tag=$(REGISTRY)/$(ALAZ_IMAGE_NAME):$(ALAZ_TAG)-$(TARGET_ARCH) -f $(ALAZ_DOCKERFILE) .
+	docker buildx build --push --platform=$(DOCKER_PLATFORM) --builder=$(BUILDX_BUILDER) --build-arg OODLE_TAG=$(OODLE_TAG) --build-arg VERSION=$(OODLE_TAG) --tag=$(REGISTRY)/$(OODLE_IMAGE_NAME):$(OODLE_TAG)-$(TARGET_ARCH) -f $(OODLE_DOCKERFILE) .
 
 .PHONY: docker_merge_platforms
 docker_merge_platforms:
-	docker buildx imagetools create --tag $(REGISTRY)/$(ALAZ_IMAGE_NAME):$(ALAZ_TAG) $(REGISTRY)/$(ALAZ_IMAGE_NAME):$(ALAZ_TAG)-arm64 $(REGISTRY)/$(ALAZ_IMAGE_NAME):$(ALAZ_TAG)-x86
+	docker buildx imagetools create --tag $(REGISTRY)/$(OODLE_IMAGE_NAME):$(OODLE_TAG) $(REGISTRY)/$(OODLE_IMAGE_NAME):$(OODLE_TAG)-arm64 $(REGISTRY)/$(OODLE_IMAGE_NAME):$(OODLE_TAG)-x86
 
 .PHONY: build_push
 build_push:
-	docker build --build-arg VERSION=$(ALAZ_TAG) -t $(REGISTRY)/$(ALAZ_IMAGE_NAME):$(ALAZ_TAG)  -f $(ALAZ_DOCKERFILE) .
-	docker push $(REGISTRY)/$(ALAZ_IMAGE_NAME):$(ALAZ_TAG)
+	docker build --build-arg VERSION=$(OODLE_TAG) -t $(REGISTRY)/$(OODLE_IMAGE_NAME):$(OODLE_TAG)  -f $(OODLE_DOCKERFILE) .
+	docker push $(REGISTRY)/$(OODLE_IMAGE_NAME):$(OODLE_TAG)
 
 # make go_builder_image_build
-# ALAZ_TAG=latest
+# OODLE_TAG=latest
 # make go_generate TARGET_ARCH=arm64
-# make build_push_buildx TARGET_ARCH=arm64 ALAZ_TAG=$ALAZ_TAG
+# make build_push_buildx TARGET_ARCH=arm64 OODLE_TAG=$OODLE_TAG
 
 # make go_generate TARGET_ARCH=x86
-# make build_push_buildx TARGET_ARCH=x86 ALAZ_TAG=$ALAZ_TAG
+# make build_push_buildx TARGET_ARCH=x86 OODLE_TAG=$OODLE_TAG
 
-# make docker_merge_platforms ALAZ_TAG=$ALAZ_TAG
+# make docker_merge_platforms OODLE_TAG=$OODLE_TAG

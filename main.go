@@ -1,28 +1,25 @@
 package main
 
 import (
+	"context"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"regexp"
 	"runtime/debug"
 	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/ddosify/alaz/aggregator"
-	"github.com/ddosify/alaz/config"
 	"github.com/ddosify/alaz/cri"
 	"github.com/ddosify/alaz/datastore"
 	"github.com/ddosify/alaz/ebpf"
 	"github.com/ddosify/alaz/k8s"
-	"github.com/ddosify/alaz/logstreamer"
-
-	"context"
-
 	"github.com/ddosify/alaz/log"
-
-	"net/http"
-	_ "net/http/pprof"
+	"github.com/ddosify/alaz/logstreamer"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -36,17 +33,6 @@ func main() {
 		signal.Stop(c)
 		cancel()
 	}()
-
-	var nsFilterRx *regexp.Regexp
-	if os.Getenv("EXCLUDE_NAMESPACES") != "" {
-		nsFilterRx = regexp.MustCompile(os.Getenv("EXCLUDE_NAMESPACES"))
-	}
-
-	stopAndWait := false
-	var nsFilterStr string
-	if nsFilterRx != nil {
-		nsFilterStr = nsFilterRx.String()
-	}
 
 	var k8sCollector *k8s.K8sCollector
 	kubeEvents := make(chan interface{}, 1000)
@@ -66,11 +52,11 @@ func main() {
 			panic(err)
 		}
 		k8sVersion = k8sCollector.GetK8sVersion()
+		log.Logger.Info().Msgf("Kubertenes version: %s", k8sVersion)
 		go k8sCollector.Init(kubeEvents)
 	}
 
 	tracingEnabled, err := strconv.ParseBool(os.Getenv("TRACING_ENABLED"))
-	metricsEnabled, _ := strconv.ParseBool(os.Getenv("METRICS_ENABLED"))
 	// logsEnabled, _ := strconv.ParseBool(os.Getenv("LOGS_ENABLED"))
 
 	// Temporarily closed until otlp export's cpu performance problem is resolved
@@ -79,15 +65,8 @@ func main() {
 	logsEnabled := false
 
 	// datastore backend
-	dsBackend := datastore.NewBackendDS(ctx, config.BackendDSConfig{
-		Host:                  os.Getenv("BACKEND_HOST"),
-		MetricsExport:         metricsEnabled,
-		GpuMetricsExport:      metricsEnabled,
-		MetricsExportInterval: 10,
-		ReqBufferSize:         40000, // TODO: get from a conf file
-		ConnBufferSize:        1000,  // TODO: get from a conf file
-		KafkaEventBufferSize:  2000,
-	})
+	reg := prometheus.NewRegistry()
+	dsBackend := datastore.NewOodleDS(reg)
 
 	var ct *cri.CRITool
 	ct, err = cri.NewCRITool(ctx)
@@ -102,8 +81,6 @@ func main() {
 
 		a := aggregator.NewAggregator(ctx, ct, kubeEvents, ec.EbpfEvents(), ec.EbpfProcEvents(), ec.EbpfTcpEvents(), ec.TlsAttachQueue(), dsBackend)
 		a.Run()
-
-		// a.AdvertiseDebugData()
 
 		ec.Init()
 		go ec.ListenEvents()
@@ -144,19 +121,7 @@ func main() {
 		}
 	}
 
-	dsBackend.Start()
-
-	healthCh := dsBackend.SendHealthCheck(tracingEnabled, metricsEnabled, logsEnabled, nsFilterStr, k8sVersion)
-	go func() {
-		for msg := range healthCh {
-			if msg == datastore.HealthCheckActionStop {
-				stopAndWait = true
-				cancel()
-				break
-			}
-		}
-	}()
-
+	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 	go http.ListenAndServe(":8181", nil)
 
 	if k8sCollectorEnabled {
@@ -174,15 +139,5 @@ func main() {
 		log.Logger.Info().Msg("cri done")
 	}
 
-	if stopAndWait {
-		log.Logger.Warn().Msg("Payment required. Alaz will restart itself after payment's been made.")
-		for msg := range healthCh {
-			if msg == datastore.HealthCheckActionOK {
-				log.Logger.Info().Msg("Restarting alaz...")
-				break
-			}
-		}
-	} else {
-		log.Logger.Info().Msg("alaz exiting...")
-	}
+	<-ctx.Done()
 }

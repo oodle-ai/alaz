@@ -52,10 +52,13 @@ func init() {
 		return
 	}
 
-	MonitoringID = os.Getenv("MONITORING_ID")
-	if MonitoringID == "" {
-		log.Logger.Fatal().Msg("MONITORING_ID is not set")
-	}
+	// backend.go is the alaz's backend which is unused with Oodle.
+	// This is still invoked due to it being an init function,
+	// hence, we comment out to not necessitate a MONITORING_ID
+	//MonitoringID = os.Getenv("MONITORING_ID")
+	//if MonitoringID == "" {
+	//	log.Logger.Fatal().Msg("MONITORING_ID is not set")
+	//}
 
 	NodeID = os.Getenv("NODE_NAME")
 	if NodeID == "" {
