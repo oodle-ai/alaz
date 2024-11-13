@@ -114,15 +114,29 @@ func (o *OodleDS) PersistRequest(request *Request) error {
 	}
 
 	path := request.Path
+
+	if request.Protocol != "HTTP" && request.Protocol != "HTTPS" && request.Protocol != "gRPC" {
+		// Only emit metrics for HTTP/gRPC requests. We receive DB requests as well
+		// that need to be normalized if we emit them as metrics.
+		return nil
+	}
+
+	// Remove query params from the path if it is a URL
+	// E.g. /api/v1/namespaces/default/pods?labelSelector=app%3Dnginx => /api/v1/namespaces/default/pods
+	if strings.Contains(path, "?") && strings.HasPrefix(path, "/") {
+		path = strings.SplitN(path, "?", 2)[0]
+	}
+
+	// request.ToUID is set to DNS host name if the request is to a 3rd party URL
+	// outside the cluster.
 	if isS3PathRegex.MatchString(request.ToUID) {
 		// For S3 requests, strip the bucket name from the path to avoid high cardinality metrics
 		// as path is the object name for S3 calls.
 		// Can use a fingerprint mechanism here to make it generic.
+		// S3 Path is of the form: /<bucket-name>/<path>
 		parts := strings.SplitN(path, "/", 3)
 		if len(parts) >= 3 {
 			path = "/" + parts[1] // Keep bucket name
-		} else {
-			path = "/" // Default if path doesn't contain enough parts
 		}
 	}
 
